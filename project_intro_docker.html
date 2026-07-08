@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SuperMew 项目运行与 Docker 容器说明</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: rgba(15, 23, 42, 0.78);
+      --card: rgba(255, 255, 255, 0.08);
+      --card-strong: rgba(255, 255, 255, 0.13);
+      --text: #e5e7eb;
+      --muted: #a5b4fc;
+      --soft: #cbd5e1;
+      --accent: #38bdf8;
+      --green: #34d399;
+      --yellow: #fbbf24;
+      --red: #fb7185;
+      --line: rgba(255, 255, 255, 0.14);
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+      font-family: Inter, "Microsoft YaHei", "PingFang SC", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 8% 8%, rgba(56, 189, 248, 0.28), transparent 32%),
+        radial-gradient(circle at 90% 12%, rgba(52, 211, 153, 0.20), transparent 30%),
+        radial-gradient(circle at 50% 95%, rgba(129, 140, 248, 0.22), transparent 36%),
+        var(--bg);
+      line-height: 1.65;
+    }
+
+    a { color: inherit; }
+
+    .page {
+      width: min(1180px, calc(100% - 36px));
+      margin: 0 auto;
+      padding: 44px 0 72px;
+    }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 32px;
+      padding: 48px;
+      background: linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.76));
+      box-shadow: var(--shadow);
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto -90px -140px auto;
+      width: 380px;
+      height: 380px;
+      background: radial-gradient(circle, rgba(56, 189, 248, 0.28), transparent 64%);
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+      padding: 7px 12px;
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      border-radius: 999px;
+      color: #bae6fd;
+      background: rgba(14, 165, 233, 0.12);
+      font-size: 14px;
+    }
+
+    h1 {
+      margin: 24px 0 16px;
+      max-width: 900px;
+      font-size: clamp(34px, 6vw, 64px);
+      line-height: 1.05;
+      letter-spacing: -0.05em;
+    }
+
+    h2 {
+      margin: 0 0 18px;
+      font-size: 28px;
+      letter-spacing: -0.02em;
+    }
+
+    h3 {
+      margin: 0 0 10px;
+      font-size: 19px;
+    }
+
+    p {
+      margin: 0;
+      color: var(--soft);
+    }
+
+    .hero p {
+      max-width: 800px;
+      font-size: 18px;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 28px;
+    }
+
+    .chip {
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: #dbeafe;
+      background: rgba(255, 255, 255, 0.07);
+      font-size: 14px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 18px;
+      margin-top: 18px;
+    }
+
+    .section {
+      margin-top: 28px;
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      padding: 28px;
+      background: var(--panel);
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.22);
+      backdrop-filter: blur(18px);
+    }
+
+    .card {
+      grid-column: span 4;
+      min-height: 172px;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 22px;
+      background: var(--card);
+    }
+
+    .card.wide { grid-column: span 6; }
+    .card.full { grid-column: span 12; }
+
+    .icon {
+      display: inline-grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      margin-bottom: 15px;
+      border-radius: 14px;
+      background: rgba(56, 189, 248, 0.16);
+      color: #7dd3fc;
+      font-weight: 800;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .step {
+      position: relative;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: var(--card);
+    }
+
+    .step strong {
+      display: block;
+      margin-bottom: 7px;
+      color: #fff;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: rgba(2, 6, 23, 0.35);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 880px;
+    }
+
+    th, td {
+      padding: 15px 16px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: #bfdbfe;
+      background: rgba(15, 23, 42, 0.72);
+      font-size: 14px;
+    }
+
+    tr:last-child td { border-bottom: none; }
+
+    code, pre {
+      font-family: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+    }
+
+    code {
+      padding: 2px 6px;
+      border-radius: 7px;
+      color: #e0f2fe;
+      background: rgba(14, 165, 233, 0.12);
+      border: 1px solid rgba(125, 211, 252, 0.16);
+    }
+
+    pre {
+      margin: 14px 0 0;
+      overflow: auto;
+      padding: 18px;
+      border-radius: 20px;
+      color: #dbeafe;
+      background: rgba(2, 6, 23, 0.62);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+    }
+
+    .note {
+      border-left: 4px solid var(--yellow);
+      padding: 14px 16px;
+      border-radius: 14px;
+      background: rgba(251, 191, 36, 0.10);
+      color: #fde68a;
+    }
+
+    .ok { color: var(--green); }
+    .warn { color: var(--yellow); }
+    .bad { color: var(--red); }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      margin-top: 18px;
+    }
+
+    .mini-list {
+      margin: 12px 0 0;
+      padding-left: 18px;
+      color: var(--soft);
+    }
+
+    .mini-list li { margin: 7px 0; }
+
+    .footer {
+      margin-top: 26px;
+      color: #94a3b8;
+      text-align: center;
+      font-size: 14px;
+    }
+
+    @media (max-width: 900px) {
+      .hero { padding: 32px; }
+      .card, .card.wide { grid-column: span 12; }
+      .flow { grid-template-columns: 1fr; }
+      .two-col { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <span class="eyebrow">🐳 SuperMew 本地运行说明 · Docker / uv / npm</span>
+      <h1>这个项目不是一个单独脚本，而是一套 RAG 聊天应用。</h1>
+      <p>
+        SuperMew 由 Vue 前端、FastAPI 后端、PostgreSQL、Redis、Milvus 向量库和大模型接口组成。
+        Docker 在这里负责把数据库、缓存和向量库这些“后台基础设施”一次性拉起来。
+      </p>
+      <div class="chips">
+        <span class="chip">前端：Vue 3 + Vite</span>
+        <span class="chip">后端：FastAPI + LangChain</span>
+        <span class="chip">依赖：Docker Compose</span>
+        <span class="chip">包管理：uv + npm</span>
+        <span class="chip">向量库：Milvus</span>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>一句话看懂运行架构</h2>
+      <div class="flow">
+        <div class="step">
+          <strong>浏览器</strong>
+          <p>访问 <code>127.0.0.1:8000</code>，使用聊天和文档上传页面。</p>
+        </div>
+        <div class="step">
+          <strong>FastAPI 后端</strong>
+          <p>由 <code>uv</code> 启动，处理登录、聊天、文档上传、SSE 流式输出。</p>
+        </div>
+        <div class="step">
+          <strong>LangChain Agent</strong>
+          <p>决定是否调用天气工具或知识库检索工具。</p>
+        </div>
+        <div class="step">
+          <strong>RAG 知识库</strong>
+          <p>文档切块、embedding、Milvus 检索、rerank、生成回答。</p>
+        </div>
+        <div class="step">
+          <strong>Docker 服务</strong>
+          <p>PostgreSQL、Redis、Milvus、MinIO、Etcd 在后台提供基础能力。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Docker 在这个项目里到底部署了什么？</h2>
+      <p>
+        执行 <code>docker compose up -d</code> 后，Docker 会根据根目录的
+        <code>docker-compose.yml</code> 创建一个名为 <code>milvus</code> 的网络，并启动下面这些容器。
+      </p>
+      <div class="table-wrap" style="margin-top: 18px;">
+        <table>
+          <thead>
+            <tr>
+              <th>容器名</th>
+              <th>镜像</th>
+              <th>端口</th>
+              <th>作用</th>
+              <th>持久化数据目录</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>supermew-postgres</code></td>
+              <td><code>postgres:15</code></td>
+              <td><code>5432</code></td>
+              <td>关系数据库，存用户、会话、聊天历史、父级文档块。</td>
+              <td><code>volumes/postgres</code></td>
+            </tr>
+            <tr>
+              <td><code>supermew-redis</code></td>
+              <td><code>redis:7-alpine</code></td>
+              <td><code>6379</code></td>
+              <td>缓存热点会话和父文档块，加速读取。</td>
+              <td><code>volumes/redis</code></td>
+            </tr>
+            <tr>
+              <td><code>milvus-etcd</code></td>
+              <td><code>quay.io/coreos/etcd:v3.5.18</code></td>
+              <td>内部使用</td>
+              <td>Milvus 的元数据组件，类似“向量库的目录账本”。</td>
+              <td><code>volumes/etcd</code></td>
+            </tr>
+            <tr>
+              <td><code>milvus-minio</code></td>
+              <td><code>minio/minio</code></td>
+              <td><code>9000</code>, <code>9001</code></td>
+              <td>Milvus 使用的对象存储，保存向量库底层文件。</td>
+              <td><code>volumes/minio</code></td>
+            </tr>
+            <tr>
+              <td><code>milvus-standalone</code></td>
+              <td><code>milvusdb/milvus:v2.5.14</code></td>
+              <td><code>19530</code>, <code>9091</code></td>
+              <td>核心向量数据库，保存文档 embedding，负责 Dense + BM25 混合检索。</td>
+              <td><code>volumes/milvus</code></td>
+            </tr>
+            <tr>
+              <td><code>milvus-attu</code></td>
+              <td><code>zilliz/attu:v2.5.11</code></td>
+              <td><code>8080</code> 或 <code>18080</code></td>
+              <td>Milvus 的网页管理工具。它不是核心服务，起不来也不影响后端聊天。</td>
+              <td>无关键业务数据</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>这些东西到底放在哪里？</h2>
+      <div class="grid">
+        <div class="card wide">
+          <span class="icon">C</span>
+          <h3>Docker 镜像和容器层：通常在 C 盘</h3>
+          <p>
+            Windows + Docker Desktop + WSL2 下，镜像通常进入 Docker 自己的 WSL 虚拟磁盘，
+            常见位置类似 <code>C:\Users\PC\AppData\Local\Docker\wsl\</code>。
+            这就是你看到 C 盘变大的主要原因。
+          </p>
+        </div>
+        <div class="card wide">
+          <span class="icon">D</span>
+          <h3>项目运行数据：在当前项目目录</h3>
+          <p>
+            这个项目的 compose 文件把数据库持久化目录映射到了
+            <code>D:\大学内容\大三下\项目分析\SuperMew\volumes</code>。
+            停掉容器后，这些数据仍然保留。
+          </p>
+        </div>
+        <div class="card wide">
+          <span class="icon">Py</span>
+          <h3>Python 依赖：项目的 <code>.venv</code></h3>
+          <p>
+            <code>uv sync --frozen</code> 会创建/使用 <code>.venv</code>，
+            FastAPI、LangChain、pymilvus、sentence-transformers 都在这里。
+          </p>
+        </div>
+        <div class="card wide">
+          <span class="icon">JS</span>
+          <h3>前端依赖：<code>frontend/node_modules</code></h3>
+          <p>
+            <code>npm.cmd install</code> 安装 Vue、Vite、Axios 等前端包；
+            <code>npm.cmd run build</code> 会生成 <code>frontend/dist</code>。
+          </p>
+        </div>
+      </div>
+      <div class="note" style="margin-top: 18px;">
+        如果 C 盘紧张，可以在 Docker Desktop 的 Settings → Resources → Advanced 里调整 Disk image location 到 D 盘。
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>第一次完整启动命令</h2>
+      <div class="two-col">
+        <div class="card full">
+          <h3>1. 启动 Docker 依赖</h3>
+          <p>拉起数据库、缓存、向量库。<code>-d</code> 表示后台运行。</p>
+          <pre>cd D:\大学内容\大三下\项目分析\SuperMew
+docker compose up -d</pre>
+        </div>
+        <div class="card full">
+          <h3>2. 安装后端依赖</h3>
+          <p>按 <code>uv.lock</code> 安装 Python 依赖，避免版本飘。</p>
+          <pre>uv sync --frozen</pre>
+        </div>
+        <div class="card full">
+          <h3>3. 安装并构建前端</h3>
+          <p>生成 <code>frontend/dist</code>，后端会托管这份静态页面。</p>
+          <pre>cd frontend
+npm.cmd install
+npm.cmd run build
+cd ..</pre>
+        </div>
+        <div class="card full">
+          <h3>4. 启动后端</h3>
+          <p>启动 FastAPI。看到 <code>Application startup complete</code> 就算成功。</p>
+          <pre>uv run python -m uvicorn backend.app:app --host 127.0.0.1 --port 8000 --log-level debug</pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>日常常用 Docker 命令</h2>
+      <div class="grid">
+        <div class="card wide">
+          <h3>查看容器状态</h3>
+          <pre>docker compose ps</pre>
+          <p>看 Postgres、Redis、Milvus 是否 running / healthy。</p>
+        </div>
+        <div class="card wide">
+          <h3>启动后台服务</h3>
+          <pre>docker compose up -d</pre>
+          <p>日常开项目时先执行它。</p>
+        </div>
+        <div class="card wide">
+          <h3>停止服务</h3>
+          <pre>docker compose down</pre>
+          <p>停止并删除容器，但保留 <code>volumes</code> 数据。</p>
+        </div>
+        <div class="card wide">
+          <h3>查看占用空间</h3>
+          <pre>docker system df</pre>
+          <p>看镜像、容器、缓存占了多少磁盘。</p>
+        </div>
+        <div class="card wide">
+          <h3>查看日志</h3>
+          <pre>docker compose logs -f standalone</pre>
+          <p>重点排查 Milvus 时用。Postgres/Redis 也可以换服务名看。</p>
+        </div>
+        <div class="card wide">
+          <h3>清理不用的缓存</h3>
+          <pre>docker system prune</pre>
+          <p>会清理没用的缓存。<code>prune -a</code> 更彻底，但下次可能要重新下载镜像。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>几个你已经遇到过的坑</h2>
+      <div class="grid">
+        <div class="card wide">
+          <h3 class="warn">Attu 的 8080 端口冲突</h3>
+          <p>如果看到 <code>ports are not available: 8080</code>，把 compose 里的 <code>8080:3000</code> 改成 <code>18080:3000</code>。</p>
+        </div>
+        <div class="card wide">
+          <h3 class="warn">HuggingFace 模型下载失败</h3>
+          <p><code>BAAI/bge-m3</code> 是本地 embedding 模型。首次启动会下载约 2GB 权重；<code>HF_ENDPOINT</code> 要能访问。</p>
+        </div>
+        <div class="card wide">
+          <h3 class="warn">CUDA 报错</h3>
+          <p>如果 PyTorch 是 CPU 版，<code>EMBEDDING_DEVICE</code> 要写 <code>cpu</code>，不要写 <code>cuda</code>。</p>
+        </div>
+        <div class="card wide">
+          <h3 class="warn">Milvus collection not found</h3>
+          <p>服务已经启动，但还没上传文档。先上传 PDF/Word/Excel，让系统创建 <code>embeddings_collection</code>。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>判断项目是否真的跑起来</h2>
+      <ul class="mini-list">
+        <li><span class="ok">后端成功：</span>终端出现 <code>Application startup complete</code>。</li>
+        <li><span class="ok">前端成功：</span>浏览器打开 <code>http://127.0.0.1:8000/</code> 有页面。</li>
+        <li><span class="ok">数据库成功：</span>注册/登录接口返回 200。</li>
+        <li><span class="ok">知识库成功：</span>上传文档后，Milvus 创建 <code>embeddings_collection</code>，聊天不再报 collection not found。</li>
+      </ul>
+    </section>
+
+    <p class="footer">
+      SuperMew 本地部署说明页 · 建议和 <code>README.md</code> 一起看。
+    </p>
+  </main>
+</body>
+</html>

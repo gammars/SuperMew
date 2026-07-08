@@ -1,6 +1,8 @@
 from typing import Annotated, Literal, TypedDict, List, Optional
+import json
 import operator
 import os
+import re
 from langchain.chat_models import init_chat_model
 from langgraph.graph import StateGraph, END
 from langgraph.types import Send
@@ -25,6 +27,125 @@ FAST_MODEL = os.getenv("FAST_MODEL") or MODEL
 _grader_model = None
 _router_model = None
 _complexity_model = None
+
+
+def _raw_text_fallback(stage: str, model, prompt: str, error: Exception) -> str:
+    """结构化输出失败时，使用普通文本调用兜底，并返回模型原始文本。"""
+    try:
+        raw_msg = model.invoke([{"role": "user", "content": prompt}])
+        raw = str(getattr(raw_msg, "content", "") or "")
+        preview = re.sub(r"\s+", " ", raw).strip()[:300]
+        print(
+            f"[structured-output fallback] {stage}: "
+            f"{type(error).__name__}: {error!r}; raw={preview!r}"
+        )
+        return raw
+    except Exception as raw_error:
+        print(
+            f"[structured-output fallback failed] {stage}: "
+            f"structured_error={error!r}; raw_error={raw_error!r}"
+        )
+        return ""
+
+
+def _strip_code_fence(text: str) -> str:
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+    return cleaned.strip()
+
+
+def _load_json_from_text(text: str):
+    cleaned = _strip_code_fence(text)
+    try:
+        return json.loads(cleaned)
+    except Exception:
+        pass
+
+    match = re.search(r"(\{.*\}|\[.*\])", cleaned, flags=re.DOTALL)
+    if not match:
+        return None
+    try:
+        return json.loads(match.group(1))
+    except Exception:
+        return None
+
+
+def _parse_grade_score_from_text(text: str) -> str:
+    raw = _strip_code_fence(text)
+    parsed = _load_json_from_text(raw)
+    if isinstance(parsed, dict):
+        value = str(parsed.get("binary_score") or parsed.get("score") or "").strip().lower()
+        if value in ("yes", "no"):
+            return value
+
+    lowered = raw.strip().lower()
+    if re.search(r"\b(no|not relevant|irrelevant)\b", lowered) or any(
+        token in raw for token in ("不相关", "无关", "否")
+    ):
+        return "no"
+    if re.search(r"\b(yes|relevant)\b", lowered) or any(
+        token in raw for token in ("相关", "是")
+    ):
+        return "yes"
+    return "unknown"
+
+
+def _parse_rewrite_strategy_from_text(text: str) -> str:
+    raw = _strip_code_fence(text)
+    parsed = _load_json_from_text(raw)
+    if isinstance(parsed, dict):
+        value = str(parsed.get("strategy") or "").strip().lower()
+        if value in ("step_back", "hyde", "complex"):
+            return value
+
+    lowered = raw.lower()
+    if "hyde" in lowered or "假设" in raw:
+        return "hyde"
+    if "complex" in lowered or "复杂" in raw or "综合" in raw:
+        return "complex"
+    if "step_back" in lowered or "step-back" in lowered or "退步" in raw:
+        return "step_back"
+    return "step_back"
+
+
+def _parse_complexity_from_text(text: str) -> tuple[str, str]:
+    raw = _strip_code_fence(text)
+    parsed = _load_json_from_text(raw)
+    if isinstance(parsed, dict):
+        complexity = str(parsed.get("complexity") or "").strip().lower()
+        reason = str(parsed.get("reason") or raw).strip()
+        if complexity in ("simple", "complex"):
+            return complexity, reason
+
+    lowered = raw.lower()
+    if "complex" in lowered or "复杂" in raw or "多步骤" in raw or "多角度" in raw:
+        return "complex", raw or "fallback_complex"
+    if "simple" in lowered or "简单" in raw or "单一" in raw:
+        return "simple", raw or "fallback_simple"
+    return "simple", raw or "fallback_default_simple"
+
+
+def _parse_sub_questions_from_text(text: str, original_question: str) -> List[str]:
+    raw = _strip_code_fence(text)
+    parsed = _load_json_from_text(raw)
+    items = None
+    if isinstance(parsed, dict):
+        items = parsed.get("sub_questions") or parsed.get("questions")
+    elif isinstance(parsed, list):
+        items = parsed
+
+    if isinstance(items, list):
+        sub_qs = [str(item).strip() for item in items if str(item).strip()]
+        return sub_qs[:4] or [original_question]
+
+    lines = []
+    for line in raw.splitlines():
+        cleaned = re.sub(r"^\s*(?:[-*•]|\d+[.、)]|问题\s*\d+[:：])\s*", "", line).strip()
+        if cleaned:
+            lines.append(cleaned)
+    return lines[:4] or [original_question]
 
 
 def _get_grader_model():
@@ -216,10 +337,14 @@ def grade_documents_node(state: RAGState) -> RAGState:
     question = state["question"]
     context = state.get("context", "")
     prompt = GRADE_PROMPT.format(question=question, context=context)
-    response = grader.with_structured_output(GradeDocuments).invoke(
-        [{"role": "user", "content": prompt}]
-    )
-    score = (response.binary_score or "").strip().lower()
+    try:
+        response = grader.with_structured_output(GradeDocuments).invoke(
+            [{"role": "user", "content": prompt}]
+        )
+        score = (response.binary_score or "").strip().lower()
+    except Exception as e:
+        raw = _raw_text_fallback("grade_documents_node", grader, prompt, e)
+        score = _parse_grade_score_from_text(raw)
     route = "generate_answer" if score == "yes" else "rewrite_question"
     if route == "generate_answer":
         emit_rag_step("✅", "文档相关性评估通过", f"评分: {score}")
@@ -258,8 +383,9 @@ def rewrite_question_node(state: RAGState) -> RAGState:
                     [{"role": "user", "content": prompt}]
                 )
                 strategy = decision.strategy
-            except Exception:
-                strategy = "step_back"
+            except Exception as e:
+                raw = _raw_text_fallback("rewrite_question_node", router, prompt, e)
+                strategy = _parse_rewrite_strategy_from_text(raw)
 
     expanded_query = question
     step_back_question = ""
@@ -404,9 +530,9 @@ def classify_complexity(state: RAGState) -> RAGState:
         reason = (result.reason or "").strip()
         if complexity not in ("simple", "complex"):
             complexity = "simple"
-    except Exception:
-        complexity = "simple"
-        reason = "classification_error"
+    except Exception as e:
+        raw = _raw_text_fallback("classify_complexity", model, prompt, e)
+        complexity, reason = _parse_complexity_from_text(raw)
 
     if complexity == "simple":
         emit_rag_step("✅", "简单问题 → 走标准 RAG 流程", f"理由: {reason[:60]}")
@@ -434,8 +560,9 @@ def decompose_question(state: RAGState) -> RAGState:
         sub_qs = [sq.strip() for sq in (result.sub_questions or []) if sq.strip()]
         if not sub_qs:
             sub_qs = [question]
-    except Exception:
-        sub_qs = [question]
+    except Exception as e:
+        raw = _raw_text_fallback("decompose_question", model, prompt, e)
+        sub_qs = _parse_sub_questions_from_text(raw, question)
 
     for i, sq in enumerate(sub_qs, 1):
         emit_rag_step("📌", f"子问题 {i}", sq[:80])

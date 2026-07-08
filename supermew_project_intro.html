@@ -1,0 +1,1075 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SuperMew 项目介绍与运行原理</title>
+  <style>
+    /*
+      SuperMew 项目介绍页
+      - 单文件 HTML，无外部依赖
+      - 颜色、间距、字体都集中写在 :root，方便后续修改主题
+    */
+    :root {
+      --bg: #f6f8fb;
+      --surface: #ffffff;
+      --surface-soft: #f1f5f9;
+      --text: #172033;
+      --muted: #667085;
+      --line: #dbe3ef;
+      --primary: #2563eb;
+      --primary-soft: #dbeafe;
+      --cyan: #0891b2;
+      --green: #16a34a;
+      --amber: #d97706;
+      --red: #dc2626;
+      --purple: #7c3aed;
+      --shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+      --radius-xl: 28px;
+      --radius-lg: 20px;
+      --radius-md: 14px;
+      font-family: Inter, "Microsoft YaHei", "PingFang SC", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 12% 0%, rgba(37, 99, 235, 0.16), transparent 34%),
+        radial-gradient(circle at 88% 10%, rgba(8, 145, 178, 0.12), transparent 30%),
+        linear-gradient(180deg, #ffffff 0%, var(--bg) 38%, #eef3fb 100%);
+      line-height: 1.65;
+    }
+
+    a {
+      color: inherit;
+    }
+
+    code,
+    pre {
+      font-family: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+    }
+
+    code {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 8px;
+      color: #1d4ed8;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      font-size: 0.92em;
+    }
+
+    pre {
+      overflow: auto;
+      margin: 14px 0 0;
+      padding: 18px;
+      color: #e2e8f0;
+      background: #111827;
+      border-radius: var(--radius-md);
+      line-height: 1.55;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    }
+
+    .page {
+      width: min(1180px, calc(100% - 36px));
+      margin: 0 auto;
+      padding: 36px 0 72px;
+    }
+
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 22px;
+      padding: 12px 14px;
+      border: 1px solid rgba(219, 227, 239, 0.85);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.82);
+      backdrop-filter: blur(18px);
+      box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      font-weight: 800;
+    }
+
+    .brand-badge {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 12px;
+      color: #fff;
+      background: linear-gradient(135deg, var(--primary), var(--cyan));
+    }
+
+    .nav-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: flex-end;
+    }
+
+    .nav-links a {
+      padding: 8px 11px;
+      border-radius: 999px;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 14px;
+    }
+
+    .nav-links a:hover {
+      color: var(--primary);
+      background: var(--primary-soft);
+    }
+
+    .hero {
+      overflow: hidden;
+      position: relative;
+      border-radius: 34px;
+      padding: 48px;
+      color: #fff;
+      background:
+        linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 64, 175, 0.90)),
+        radial-gradient(circle at 85% 18%, rgba(125, 211, 252, 0.38), transparent 35%);
+      box-shadow: var(--shadow);
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      right: -90px;
+      bottom: -120px;
+      width: 340px;
+      height: 340px;
+      border-radius: 50%;
+      background: rgba(56, 189, 248, 0.22);
+      filter: blur(6px);
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 1;
+      max-width: 930px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 12px;
+      border: 1px solid rgba(219, 234, 254, 0.28);
+      border-radius: 999px;
+      color: #bfdbfe;
+      background: rgba(255, 255, 255, 0.08);
+      font-size: 14px;
+    }
+
+    h1 {
+      margin: 22px 0 18px;
+      font-size: clamp(38px, 6vw, 72px);
+      line-height: 1.03;
+      letter-spacing: -0.055em;
+    }
+
+    h2 {
+      margin: 0 0 18px;
+      font-size: clamp(26px, 3vw, 36px);
+      letter-spacing: -0.035em;
+    }
+
+    h3 {
+      margin: 0 0 9px;
+      font-size: 19px;
+      letter-spacing: -0.01em;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .hero p {
+      max-width: 820px;
+      color: #dbeafe;
+      font-size: 18px;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 28px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 12px;
+      border: 1px solid rgba(219, 234, 254, 0.22);
+      border-radius: 999px;
+      color: #eff6ff;
+      background: rgba(255, 255, 255, 0.09);
+      font-size: 14px;
+    }
+
+    .section {
+      margin-top: 28px;
+      padding: 30px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-xl);
+      background: rgba(255, 255, 255, 0.88);
+      box-shadow: var(--shadow);
+    }
+
+    .section-lead {
+      max-width: 880px;
+      margin-bottom: 20px;
+      font-size: 16px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 16px;
+    }
+
+    .card {
+      grid-column: span 4;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+    }
+
+    .card.wide {
+      grid-column: span 6;
+    }
+
+    .card.full {
+      grid-column: span 12;
+    }
+
+    .card-icon {
+      display: inline-grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      margin-bottom: 13px;
+      border-radius: 14px;
+      color: #fff;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--primary), var(--cyan));
+    }
+
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+      margin: 12px 0 18px;
+    }
+
+    .tab-btn {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 9px 14px;
+      color: var(--muted);
+      background: var(--surface);
+      cursor: pointer;
+      font: inherit;
+      font-weight: 700;
+    }
+
+    .tab-btn.active {
+      color: #fff;
+      border-color: var(--primary);
+      background: var(--primary);
+    }
+
+    .diagram-panel {
+      display: none;
+    }
+
+    .diagram-panel.active {
+      display: block;
+    }
+
+    .diagram-box {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      background:
+        linear-gradient(90deg, rgba(37, 99, 235, 0.05) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(37, 99, 235, 0.05) 1px, transparent 1px),
+        #fbfdff;
+      background-size: 26px 26px;
+    }
+
+    .diagram-svg {
+      display: block;
+      min-width: 1050px;
+      width: 100%;
+      height: auto;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: var(--surface-soft);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      background: currentColor;
+    }
+
+    .timeline {
+      position: relative;
+      display: grid;
+      gap: 16px;
+      margin-top: 8px;
+    }
+
+    .timeline::before {
+      content: "";
+      position: absolute;
+      left: 20px;
+      top: 14px;
+      bottom: 14px;
+      width: 2px;
+      background: #c7d2fe;
+    }
+
+    .timeline-item {
+      position: relative;
+      padding-left: 58px;
+    }
+
+    .timeline-no {
+      position: absolute;
+      left: 0;
+      top: 0;
+      display: grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      color: #fff;
+      background: var(--primary);
+      box-shadow: 0 0 0 6px #eff6ff;
+      font-weight: 800;
+    }
+
+    .timeline-card {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+    }
+
+    table {
+      width: 100%;
+      min-width: 900px;
+      border-collapse: collapse;
+    }
+
+    th,
+    td {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: #1e40af;
+      background: #eff6ff;
+      font-size: 14px;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 9px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .pill.ok {
+      color: #166534;
+      background: #dcfce7;
+    }
+
+    .pill.warn {
+      color: #92400e;
+      background: #fef3c7;
+    }
+
+    .pill.bad {
+      color: #991b1b;
+      background: #fee2e2;
+    }
+
+    .faq {
+      display: grid;
+      gap: 12px;
+    }
+
+    details {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+    }
+
+    summary {
+      cursor: pointer;
+      padding: 17px 18px;
+      font-weight: 800;
+    }
+
+    details p,
+    details ul {
+      padding: 0 18px 18px;
+    }
+
+    ul {
+      margin: 10px 0 0;
+      padding-left: 22px;
+      color: var(--muted);
+    }
+
+    li {
+      margin: 6px 0;
+    }
+
+    .callout {
+      margin-top: 16px;
+      padding: 16px;
+      border-radius: var(--radius-md);
+      border: 1px solid #fde68a;
+      color: #78350f;
+      background: #fffbeb;
+    }
+
+    .footer {
+      margin-top: 28px;
+      color: #64748b;
+      text-align: center;
+      font-size: 14px;
+    }
+
+    @media (max-width: 880px) {
+      .page {
+        width: min(100% - 24px, 1180px);
+      }
+
+      .hero,
+      .section {
+        padding: 24px;
+        border-radius: 24px;
+      }
+
+      .nav {
+        align-items: flex-start;
+        border-radius: 22px;
+        flex-direction: column;
+      }
+
+      .nav-links {
+        justify-content: flex-start;
+      }
+
+      .card,
+      .card.wide {
+        grid-column: span 12;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="page">
+    <!-- 顶部导航：如果想减少链接，可以删掉 nav-links 中的 a 标签 -->
+    <nav class="nav">
+      <div class="brand">
+        <span class="brand-badge">S</span>
+        <span>SuperMew 技术介绍</span>
+      </div>
+      <div class="nav-links">
+        <a href="#background">项目背景</a>
+        <a href="#diagram">结构图</a>
+        <a href="#lifecycle">请求生命周期</a>
+        <a href="#risks">瓶颈与异常</a>
+        <a href="#faq">FAQ</a>
+      </div>
+    </nav>
+
+    <header class="hero">
+      <div class="hero-content">
+        <span class="eyebrow">RAG · Agent · FastAPI · Vue · Docker · Milvus</span>
+        <h1>SuperMew：面向文档知识库的流式智能问答系统</h1>
+        <p>
+          本项目将前端聊天界面、FastAPI 后端、LangChain Agent、Milvus 混合检索、
+          PostgreSQL 持久化和 Redis 缓存组合成一套可本地运行的 RAG 应用。
+          它既能进行普通对话，也能基于上传文档完成知识库检索、重写、评分、合成和流式回答。
+        </p>
+        <div class="chips">
+          <span class="chip">🧭 RAG 流程可视化</span>
+          <span class="chip">⚡ SSE 流式输出</span>
+          <span class="chip">📚 文档上传与向量化</span>
+          <span class="chip">🧱 Milvus Hybrid Search</span>
+          <span class="chip">🔐 登录与权限控制</span>
+          <span class="chip">🐳 Docker 本地依赖</span>
+        </div>
+      </div>
+    </header>
+
+    <section id="background" class="section">
+      <h2>项目背景与核心模块</h2>
+      <p class="section-lead">
+        项目目标是构建一个“能看文档、能解释检索过程、能流式回答”的本地知识库助手。
+        它适合课程项目展示、RAG 技术学习、保研/资料类文档问答、以及多阶段检索流程演示。
+      </p>
+
+      <div class="grid">
+        <article class="card">
+          <div class="card-icon">前</div>
+          <h3>Vue 前端</h3>
+          <p>提供登录、会话、聊天、文档上传、RAG 过程展示和来源片段查看。生产构建产物位于 <code>frontend/dist</code>。</p>
+        </article>
+        <article class="card">
+          <div class="card-icon">API</div>
+          <h3>FastAPI 后端</h3>
+          <p>暴露认证、会话、聊天、文档接口；通过 <code>/chat/stream</code> 实现流式回答。</p>
+        </article>
+        <article class="card">
+          <div class="card-icon">AI</div>
+          <h3>LangChain Agent</h3>
+          <p>负责调用大模型、选择工具，并在需要时调用 <code>search_knowledge_base</code> 进入 RAG。</p>
+        </article>
+        <article class="card">
+          <div class="card-icon">RAG</div>
+          <h3>检索增强生成</h3>
+          <p>支持复杂度分类、问题分解、混合检索、Auto-merging、相关性评分、查询重写和最终上下文合成。</p>
+        </article>
+        <article class="card">
+          <div class="card-icon">DB</div>
+          <h3>数据层</h3>
+          <p>PostgreSQL 保存用户、会话、父级文档块；Redis 做缓存；Milvus 保存叶子分块向量。</p>
+        </article>
+        <article class="card">
+          <div class="card-icon">Ops</div>
+          <h3>运行依赖</h3>
+          <p>Docker Compose 启动 PostgreSQL、Redis、Milvus、Etcd、MinIO、Attu；uv 管 Python 环境，npm 管前端依赖。</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="diagram" class="section">
+      <h2>运行结构图 / 数据流图 / 时序图</h2>
+      <p class="section-lead">
+        下方三张图从不同角度展示系统关系。点击按钮可以切换视图：系统架构看模块职责，数据流看文档与问题怎么流动，时序图看一次聊天请求如何完成。
+      </p>
+
+      <div class="tabs" role="tablist" aria-label="图表切换">
+        <button class="tab-btn active" data-target="arch">系统架构图</button>
+        <button class="tab-btn" data-target="flow">数据流图</button>
+        <button class="tab-btn" data-target="sequence">请求时序图</button>
+      </div>
+
+      <!-- 架构图：用 SVG 画，方便离线查看和截图 -->
+      <div id="arch" class="diagram-panel active">
+        <div class="diagram-box">
+          <svg class="diagram-svg" viewBox="0 0 1120 650" role="img" aria-label="SuperMew 系统架构图">
+            <defs>
+              <marker id="arrow-blue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L0,6 L9,3 z" fill="#2563eb" />
+              </marker>
+              <marker id="arrow-green" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L0,6 L9,3 z" fill="#16a34a" />
+              </marker>
+              <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#0f172a" flood-opacity="0.12" />
+              </filter>
+            </defs>
+
+            <rect x="20" y="22" width="1080" height="606" rx="26" fill="#ffffff" stroke="#dbe3ef" />
+            <text x="56" y="66" font-size="24" font-weight="800" fill="#172033">SuperMew 系统架构</text>
+            <text x="56" y="92" font-size="14" fill="#667085">前端、后端、RAG、数据服务和外部模型共同完成一次知识库问答</text>
+
+            <!-- 用户与前端 -->
+            <g filter="url(#softShadow)">
+              <rect x="60" y="145" width="180" height="112" rx="18" fill="#eff6ff" stroke="#93c5fd" />
+              <text x="90" y="178" font-size="18" font-weight="800" fill="#1d4ed8">浏览器用户</text>
+              <text x="90" y="205" font-size="13" fill="#475569">提问、上传文档</text>
+              <text x="90" y="226" font-size="13" fill="#475569">查看流式回答</text>
+            </g>
+
+            <g filter="url(#softShadow)">
+              <rect x="310" y="120" width="210" height="160" rx="18" fill="#ecfeff" stroke="#67e8f9" />
+              <text x="340" y="154" font-size="18" font-weight="800" fill="#0e7490">Vue 前端</text>
+              <text x="340" y="182" font-size="13" fill="#475569">登录 / 会话 / 聊天</text>
+              <text x="340" y="204" font-size="13" fill="#475569">文档上传进度</text>
+              <text x="340" y="226" font-size="13" fill="#475569">RAG 过程可视化</text>
+              <text x="340" y="248" font-size="13" fill="#475569">来源片段展示</text>
+            </g>
+
+            <g filter="url(#softShadow)">
+              <rect x="590" y="120" width="220" height="160" rx="18" fill="#f5f3ff" stroke="#c4b5fd" />
+              <text x="622" y="154" font-size="18" font-weight="800" fill="#6d28d9">FastAPI 后端</text>
+              <text x="622" y="182" font-size="13" fill="#475569">认证 / 会话 / 文档 API</text>
+              <text x="622" y="204" font-size="13" fill="#475569">/chat/stream SSE</text>
+              <text x="622" y="226" font-size="13" fill="#475569">静态资源托管</text>
+              <text x="622" y="248" font-size="13" fill="#475569">数据库初始化</text>
+            </g>
+
+            <g filter="url(#softShadow)">
+              <rect x="870" y="120" width="180" height="160" rx="18" fill="#f0fdf4" stroke="#86efac" />
+              <text x="900" y="154" font-size="18" font-weight="800" fill="#15803d">Agent 层</text>
+              <text x="900" y="182" font-size="13" fill="#475569">工具选择</text>
+              <text x="900" y="204" font-size="13" fill="#475569">普通对话</text>
+              <text x="900" y="226" font-size="13" fill="#475569">调用知识库工具</text>
+              <text x="900" y="248" font-size="13" fill="#475569">组织最终回答</text>
+            </g>
+
+            <!-- RAG 与数据层 -->
+            <g filter="url(#softShadow)">
+              <rect x="590" y="350" width="220" height="172" rx="18" fill="#fff7ed" stroke="#fdba74" />
+              <text x="622" y="386" font-size="18" font-weight="800" fill="#c2410c">RAG 图流程</text>
+              <text x="622" y="414" font-size="13" fill="#475569">复杂度分类 / 子问题分解</text>
+              <text x="622" y="436" font-size="13" fill="#475569">Hybrid Search / Auto-merge</text>
+              <text x="622" y="458" font-size="13" fill="#475569">评分 / 重写 / 扩展检索</text>
+              <text x="622" y="480" font-size="13" fill="#475569">合成上下文</text>
+            </g>
+
+            <g filter="url(#softShadow)">
+              <rect x="320" y="360" width="170" height="132" rx="18" fill="#f8fafc" stroke="#cbd5e1" />
+              <text x="350" y="395" font-size="17" font-weight="800" fill="#334155">PostgreSQL</text>
+              <text x="350" y="423" font-size="13" fill="#475569">用户与会话</text>
+              <text x="350" y="445" font-size="13" fill="#475569">聊天历史</text>
+              <text x="350" y="467" font-size="13" fill="#475569">父级文档块</text>
+            </g>
+
+            <g filter="url(#softShadow)">
+              <rect x="105" y="360" width="155" height="132" rx="18" fill="#fff1f2" stroke="#fecdd3" />
+              <text x="134" y="395" font-size="17" font-weight="800" fill="#be123c">Redis</text>
+              <text x="134" y="423" font-size="13" fill="#475569">热点会话缓存</text>
+              <text x="134" y="445" font-size="13" fill="#475569">父文档缓存</text>
+            </g>
+
+            <g filter="url(#softShadow)">
+              <rect x="870" y="360" width="180" height="132" rx="18" fill="#eef2ff" stroke="#a5b4fc" />
+              <text x="900" y="395" font-size="17" font-weight="800" fill="#4338ca">Milvus</text>
+              <text x="900" y="423" font-size="13" fill="#475569">L3 叶子向量</text>
+              <text x="900" y="445" font-size="13" fill="#475569">Dense + BM25</text>
+              <text x="900" y="467" font-size="13" fill="#475569">RRF 融合排序</text>
+            </g>
+
+            <g filter="url(#softShadow)">
+              <rect x="840" y="540" width="240" height="56" rx="16" fill="#f8fafc" stroke="#cbd5e1" />
+              <text x="866" y="574" font-size="15" font-weight="800" fill="#334155">Etcd + MinIO：Milvus 依赖</text>
+            </g>
+
+            <g filter="url(#softShadow)">
+              <rect x="80" y="540" width="410" height="56" rx="16" fill="#f8fafc" stroke="#cbd5e1" />
+              <text x="110" y="574" font-size="15" font-weight="800" fill="#334155">Docker Compose：PostgreSQL / Redis / Milvus / Attu</text>
+            </g>
+
+            <g filter="url(#softShadow)">
+              <rect x="535" y="540" width="260" height="56" rx="16" fill="#f0f9ff" stroke="#7dd3fc" />
+              <text x="565" y="574" font-size="15" font-weight="800" fill="#0369a1">外部 LLM / Rerank API</text>
+            </g>
+
+            <!-- arrows -->
+            <line x1="240" y1="201" x2="310" y2="201" stroke="#2563eb" stroke-width="3" marker-end="url(#arrow-blue)" />
+            <line x1="520" y1="201" x2="590" y2="201" stroke="#2563eb" stroke-width="3" marker-end="url(#arrow-blue)" />
+            <line x1="810" y1="201" x2="870" y2="201" stroke="#2563eb" stroke-width="3" marker-end="url(#arrow-blue)" />
+            <line x1="960" y1="280" x2="780" y2="350" stroke="#16a34a" stroke-width="3" marker-end="url(#arrow-green)" />
+            <line x1="590" y1="428" x2="490" y2="428" stroke="#2563eb" stroke-width="3" marker-end="url(#arrow-blue)" />
+            <line x1="810" y1="428" x2="870" y2="428" stroke="#2563eb" stroke-width="3" marker-end="url(#arrow-blue)" />
+            <line x1="590" y1="462" x2="260" y2="462" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)" />
+            <line x1="700" y1="522" x2="665" y2="540" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)" />
+            <line x1="960" y1="492" x2="960" y2="540" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)" />
+          </svg>
+        </div>
+        <div class="legend">
+          <span><i class="dot" style="color: var(--primary)"></i>请求与响应</span>
+          <span><i class="dot" style="color: var(--green)"></i>Agent 调用 RAG</span>
+          <span><i class="dot" style="color: var(--amber)"></i>检索与重写</span>
+        </div>
+      </div>
+
+      <div id="flow" class="diagram-panel">
+        <div class="diagram-box">
+          <svg class="diagram-svg" viewBox="0 0 1120 520" role="img" aria-label="SuperMew 数据流图">
+            <defs>
+              <marker id="arrow-flow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L0,6 L9,3 z" fill="#2563eb" />
+              </marker>
+            </defs>
+            <rect x="20" y="22" width="1080" height="476" rx="26" fill="#ffffff" stroke="#dbe3ef" />
+            <text x="56" y="66" font-size="24" font-weight="800" fill="#172033">文档入库与聊天检索数据流</text>
+
+            <rect x="60" y="122" width="180" height="94" rx="16" fill="#eff6ff" stroke="#93c5fd" />
+            <text x="90" y="156" font-size="17" font-weight="800" fill="#1d4ed8">上传文档</text>
+            <text x="90" y="184" font-size="13" fill="#475569">PDF / Word / Excel</text>
+
+            <rect x="305" y="122" width="180" height="94" rx="16" fill="#fff7ed" stroke="#fdba74" />
+            <text x="335" y="156" font-size="17" font-weight="800" fill="#c2410c">解析与三级分块</text>
+            <text x="335" y="184" font-size="13" fill="#475569">L1 / L2 / L3</text>
+
+            <rect x="550" y="90" width="190" height="94" rx="16" fill="#f0fdf4" stroke="#86efac" />
+            <text x="580" y="124" font-size="17" font-weight="800" fill="#15803d">父级块入库</text>
+            <text x="580" y="152" font-size="13" fill="#475569">PostgreSQL + Redis</text>
+
+            <rect x="550" y="225" width="190" height="94" rx="16" fill="#eef2ff" stroke="#a5b4fc" />
+            <text x="580" y="259" font-size="17" font-weight="800" fill="#4338ca">叶子块向量化</text>
+            <text x="580" y="287" font-size="13" fill="#475569">BAAI/bge-m3</text>
+
+            <rect x="800" y="225" width="210" height="94" rx="16" fill="#f8fafc" stroke="#cbd5e1" />
+            <text x="830" y="259" font-size="17" font-weight="800" fill="#334155">Milvus Collection</text>
+            <text x="830" y="287" font-size="13" fill="#475569">Dense Vector + BM25</text>
+
+            <rect x="60" y="358" width="180" height="94" rx="16" fill="#ecfeff" stroke="#67e8f9" />
+            <text x="90" y="392" font-size="17" font-weight="800" fill="#0e7490">用户问题</text>
+            <text x="90" y="420" font-size="13" fill="#475569">query / session</text>
+
+            <rect x="305" y="358" width="180" height="94" rx="16" fill="#f5f3ff" stroke="#c4b5fd" />
+            <text x="335" y="392" font-size="17" font-weight="800" fill="#6d28d9">问题路由</text>
+            <text x="335" y="420" font-size="13" fill="#475569">简单 / 复杂 / 分解</text>
+
+            <rect x="550" y="358" width="190" height="94" rx="16" fill="#fff1f2" stroke="#fecdd3" />
+            <text x="580" y="392" font-size="17" font-weight="800" fill="#be123c">检索与精排</text>
+            <text x="580" y="420" font-size="13" fill="#475569">Hybrid → Merge → Rerank</text>
+
+            <rect x="800" y="358" width="210" height="94" rx="16" fill="#f0fdf4" stroke="#86efac" />
+            <text x="830" y="392" font-size="17" font-weight="800" fill="#15803d">答案生成</text>
+            <text x="830" y="420" font-size="13" fill="#475569">Context + LLM + SSE</text>
+
+            <line x1="240" y1="169" x2="305" y2="169" stroke="#2563eb" stroke-width="3" marker-end="url(#arrow-flow)" />
+            <line x1="485" y1="150" x2="550" y2="137" stroke="#2563eb" stroke-width="3" marker-end="url(#arrow-flow)" />
+            <line x1="485" y1="188" x2="550" y2="258" stroke="#2563eb" stroke-width="3" marker-end="url(#arrow-flow)" />
+            <line x1="740" y1="272" x2="800" y2="272" stroke="#2563eb" stroke-width="3" marker-end="url(#arrow-flow)" />
+            <line x1="240" y1="405" x2="305" y2="405" stroke="#2563eb" stroke-width="3" marker-end="url(#arrow-flow)" />
+            <line x1="485" y1="405" x2="550" y2="405" stroke="#2563eb" stroke-width="3" marker-end="url(#arrow-flow)" />
+            <line x1="645" y1="358" x2="645" y2="319" stroke="#2563eb" stroke-width="3" marker-end="url(#arrow-flow)" />
+            <line x1="740" y1="405" x2="800" y2="405" stroke="#2563eb" stroke-width="3" marker-end="url(#arrow-flow)" />
+          </svg>
+        </div>
+      </div>
+
+      <div id="sequence" class="diagram-panel">
+        <div class="diagram-box">
+          <svg class="diagram-svg" viewBox="0 0 1120 560" role="img" aria-label="SuperMew 请求时序图">
+            <defs>
+              <marker id="arrow-seq" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L0,6 L9,3 z" fill="#2563eb" />
+              </marker>
+            </defs>
+            <rect x="20" y="22" width="1080" height="516" rx="26" fill="#ffffff" stroke="#dbe3ef" />
+            <text x="56" y="66" font-size="24" font-weight="800" fill="#172033">一次聊天请求时序</text>
+
+            <g font-size="15" font-weight="800" fill="#172033">
+              <text x="92" y="112">用户/前端</text>
+              <text x="310" y="112">FastAPI</text>
+              <text x="516" y="112">Agent</text>
+              <text x="710" y="112">RAG</text>
+              <text x="910" y="112">数据/模型服务</text>
+            </g>
+
+            <g stroke="#cbd5e1" stroke-dasharray="6 8">
+              <line x1="130" y1="130" x2="130" y2="500" />
+              <line x1="340" y1="130" x2="340" y2="500" />
+              <line x1="540" y1="130" x2="540" y2="500" />
+              <line x1="730" y1="130" x2="730" y2="500" />
+              <line x1="940" y1="130" x2="940" y2="500" />
+            </g>
+
+            <g stroke="#2563eb" stroke-width="3" marker-end="url(#arrow-seq)" fill="none">
+              <line x1="130" y1="160" x2="340" y2="160" />
+              <line x1="340" y1="205" x2="540" y2="205" />
+              <line x1="540" y1="250" x2="730" y2="250" />
+              <line x1="730" y1="295" x2="940" y2="295" />
+              <line x1="940" y1="340" x2="730" y2="340" />
+              <line x1="730" y1="385" x2="540" y2="385" />
+              <line x1="540" y1="430" x2="340" y2="430" />
+              <line x1="340" y1="475" x2="130" y2="475" />
+            </g>
+
+            <g font-size="13" fill="#475569">
+              <text x="150" y="152">POST /chat/stream</text>
+              <text x="360" y="197">鉴权、取会话历史</text>
+              <text x="560" y="242">判断是否调用工具</text>
+              <text x="750" y="287">Embedding / Milvus / PG / Rerank</text>
+              <text x="760" y="332">返回 top-k 片段与 trace</text>
+              <text x="560" y="377">拼接上下文生成回答</text>
+              <text x="360" y="422">写入会话、缓存更新</text>
+              <text x="150" y="467">SSE token 流式显示</text>
+            </g>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <section id="lifecycle" class="section">
+      <h2>一次完整请求的生命周期：启动 → 核心处理 → 结果输出</h2>
+
+      <div class="timeline">
+        <div class="timeline-item">
+          <div class="timeline-no">1</div>
+          <div class="timeline-card">
+            <h3>启动阶段：把“地基”先跑起来</h3>
+            <p>
+              开发者先启动 Docker Desktop，然后执行 <code>docker compose up -d</code>。
+              Compose 会启动 PostgreSQL、Redis、Milvus、Etcd、MinIO、Attu。
+              这些服务不是业务代码本身，而是后端运行时依赖的“基础设施”。
+            </p>
+            <pre>docker compose up -d
+uv run --no-sync python -m uvicorn backend.app:app --host 127.0.0.1 --port 8000 --log-level debug</pre>
+          </div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-no">2</div>
+          <div class="timeline-card">
+            <h3>后端初始化：加载配置、模型和路由</h3>
+            <p>
+              FastAPI 读取 <code>.env</code>，初始化数据库表、聊天模型、embedding 模型和路由。
+              如果 <code>EMBEDDING_DEVICE=cuda</code>，本地 embedding 会尝试使用 GPU；如果 PyTorch 是 CPU 版，就会出现 CUDA 相关错误。
+            </p>
+          </div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-no">3</div>
+          <div class="timeline-card">
+            <h3>文档入库：把资料变成可检索知识</h3>
+            <p>
+              用户上传文档后，后端解析文件并做三级分块。父级块写入 PostgreSQL，叶子块生成向量后写入 Milvus。
+              Milvus 还会通过 BM25 函数支持稀疏检索，最终形成 Dense + Sparse 的混合检索基础。
+            </p>
+          </div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-no">4</div>
+          <div class="timeline-card">
+            <h3>聊天请求：前端通过 SSE 等待流式回答</h3>
+            <p>
+              用户提问时，前端调用 <code>/chat/stream</code>。后端先校验用户身份，读取会话历史，
+              然后交给 Agent 判断是否需要调用知识库工具。
+            </p>
+          </div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-no">5</div>
+          <div class="timeline-card">
+            <h3>RAG 核心处理：检索、合并、评分、重写</h3>
+            <p>
+              RAG 会先判断问题复杂度。简单问题直接检索；复杂问题会被拆成多个子问题并行检索。
+              每次检索会经历 Milvus 召回、Auto-merging 合并父块、可选 rerank 精排、文档相关性评分。
+              如果相关性不足，会触发 step-back 或 HyDE 等重写策略。
+            </p>
+          </div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-no">6</div>
+          <div class="timeline-card">
+            <h3>结果输出：生成回答并展示检索过程</h3>
+            <p>
+              后端将 top-k 文档片段拼接为上下文，调用大模型生成答案，并通过 SSE 逐 token 推送给前端。
+              同时，检索 trace 会展示候选池数量、是否 auto-merge、是否 rerank、评分结果和来源片段。
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="risks" class="section">
+      <h2>关键瓶颈与常见异常</h2>
+      <p class="section-lead">
+        这套系统的瓶颈一般不在单个地方，而是在“本地模型、向量库、外部模型 API、结构化输出兼容性”之间切换。
+      </p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>现象</th>
+              <th>常见原因</th>
+              <th>处理方式</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="pill bad">Docker 服务起不来</span></td>
+              <td>Docker Desktop 未运行、WSL2 后端未启动、端口冲突，如 Attu 占用 8080。</td>
+              <td>先启动 Docker Desktop；用 <code>docker compose ps</code> 查看状态；8080 冲突可改成 <code>18080:3000</code>。</td>
+            </tr>
+            <tr>
+              <td><span class="pill warn">Milvus collection not found</span></td>
+              <td>还没有上传文档，<code>embeddings_collection</code> 尚未创建。</td>
+              <td>先上传一份 PDF / Word / Excel，等待向量化入库完成。</td>
+            </tr>
+            <tr>
+              <td><span class="pill warn">Torch not compiled with CUDA enabled</span></td>
+              <td>项目环境里的 PyTorch 是 CPU 版，但 <code>EMBEDDING_DEVICE=cuda</code>。</td>
+              <td>安装 CUDA 版 torch，并用 <code>uv run --no-sync</code> 启动，避免 uv 自动同步回 CPU 版。</td>
+            </tr>
+            <tr>
+              <td><span class="pill warn">HuggingFace 模型下载失败</span></td>
+              <td><code>BAAI/bge-m3</code> 首次启动需要下载，网络、镜像源或缓存目录权限异常。</td>
+              <td>检查 <code>HF_ENDPOINT</code>，可设置 <code>HF_HOME</code> 到项目 D 盘目录。</td>
+            </tr>
+            <tr>
+              <td><span class="pill warn">structured-output fallback</span></td>
+              <td>部分 OpenAI-compatible 模型不完全支持 LangChain structured output。</td>
+              <td>系统已回退为普通文本解析，例如从 <code>yes</code>、<code>complex</code>、<code>【简单问题】</code> 中提取控制信号。</td>
+            </tr>
+            <tr>
+              <td><span class="pill warn">Rerank 404</span></td>
+              <td><code>RERANK_BINDING_HOST</code> 写成了带 <code>/v1</code> 的地址，导致最终变成 <code>/v1/v1/rerank</code>；或者服务商根本不支持 rerank。</td>
+              <td>填写主机根地址，如 <code>https://api.siliconflow.cn</code>；没有 rerank 服务时留空关闭。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="faq" class="section">
+      <h2>常见问题问答</h2>
+      <div class="faq">
+        <details open>
+          <summary>1. Docker 在这个项目里到底部署了什么？</summary>
+          <p>
+            Docker Compose 部署 PostgreSQL、Redis、Milvus、Etcd、MinIO 和 Attu。
+            其中 PostgreSQL 存业务数据，Redis 做缓存，Milvus 存向量，Etcd 和 MinIO 是 Milvus 运行依赖，Attu 是 Milvus 的可视化管理页面。
+          </p>
+        </details>
+
+        <details>
+          <summary>2. uv、npm、Docker 分别负责什么？</summary>
+          <p>
+            <code>uv</code> 管 Python 后端环境和依赖，<code>npm</code> 管 Vue 前端依赖和构建，
+            <code>Docker</code> 管数据库、缓存和向量库这些后台服务。
+          </p>
+        </details>
+
+        <details>
+          <summary>3. 为什么复杂问题会出现 synthesis 阶段？</summary>
+          <p>
+            复杂问题会先分解成多个子问题，每个子问题独立检索。最后系统进入 synthesis 阶段，把多个子 Agent 的结果去重、合并，再作为最终上下文。
+            因此 synthesis 展示的是合成层，不一定直接展示每个子检索的 rerank 细节。
+          </p>
+        </details>
+
+        <details>
+          <summary>4. Rerank 要怎么配置？</summary>
+          <p>
+            项目代码默认请求 <code>/v1/rerank</code>。如果使用 SiliconFlow 或 Jina 这类兼容接口，建议填写主机根地址：
+          </p>
+          <pre>RERANK_MODEL=BAAI/bge-reranker-v2-m3
+RERANK_BINDING_HOST=https://api.siliconflow.cn
+RERANK_API_KEY=你的_rerank_api_key
+RERANK_MIN_SCORE=0.0</pre>
+          <p>如果没有真实 rerank 服务，建议把三个 rerank 配置留空，系统会退回 Milvus Hybrid + RRF 排序。</p>
+        </details>
+
+        <details>
+          <summary>5. 为什么使用 GPU 后要加 <code>--no-sync</code>？</summary>
+          <p>
+            当前 <code>uv.lock</code> 可能锁定的是 CPU 版 torch。手动安装 CUDA 版 torch 后，如果继续普通 <code>uv run</code>，
+            uv 可能自动同步环境并把 torch 改回 CPU 版。使用 <code>uv run --no-sync</code> 可以避免启动前自动 sync。
+          </p>
+        </details>
+
+        <details>
+          <summary>6. 检索结果中的 Auto-merging 是什么？</summary>
+          <p>
+            系统优先召回 L3 叶子块。当同一个父块下命中多个叶子块时，系统会把它们合并回 L2 或 L1 父块，
+            让上下文更完整，减少答案只看到碎片信息的问题。
+          </p>
+        </details>
+      </div>
+
+      <div class="callout">
+        <strong>展示建议：</strong>
+        如果用于技术分享，可以先讲 Docker/uv/npm 分工，再讲文档入库，最后用“用户提问 → Agent → RAG → Milvus → LLM → 流式输出”的链路解释系统协作。
+      </div>
+    </section>
+
+    <footer class="footer">
+      SuperMew Project Overview · 单文件 HTML · 可直接双击打开或部署为静态页面
+    </footer>
+  </main>
+
+  <script>
+    /*
+      图表切换脚本：
+      - 点击 tab 按钮时，显示对应 diagram-panel
+      - 不依赖任何第三方库
+    */
+    const tabButtons = document.querySelectorAll(".tab-btn");
+    const panels = document.querySelectorAll(".diagram-panel");
+
+    tabButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const targetId = button.dataset.target;
+
+        tabButtons.forEach((item) => item.classList.remove("active"));
+        panels.forEach((panel) => panel.classList.remove("active"));
+
+        button.classList.add("active");
+        document.getElementById(targetId)?.classList.add("active");
+      });
+    });
+  </script>
+</body>
+</html>
