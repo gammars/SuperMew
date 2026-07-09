@@ -1,5 +1,27 @@
 <template>
   <div class="input-area-wrapper" ref="inputWrapperRef">
+    <div v-if="chatStore.currentPendingHitl" class="hitl-panel">
+      <div class="hitl-panel-header">
+        <i class="fas fa-circle-question"></i>
+        <span>需要你补充一下</span>
+      </div>
+      <div class="hitl-panel-prompt">{{ chatStore.currentPendingHitl.prompt }}</div>
+      <div
+        v-if="chatStore.currentPendingHitl.options && chatStore.currentPendingHitl.options.length"
+        class="hitl-options"
+      >
+        <button
+          v-for="option in chatStore.currentPendingHitl.options"
+          :key="option"
+          type="button"
+          class="hitl-option"
+          @click="selectHitlOption(option)"
+        >
+          {{ option }}
+        </button>
+      </div>
+    </div>
+
     <div v-if="documentPanelOpen" class="document-scope-popover">
       <div class="document-scope-popover-header">
         <div>
@@ -47,12 +69,13 @@
       </div>
     </div>
 
-    <div class="input-area">
+    <div :class="['input-area', { 'hitl-active': chatStore.currentPendingHitl }]">
       <button
         class="attach-btn"
         :class="{ active: documentPanelOpen || chatStore.selectedDocuments.length > 0 }"
         type="button"
         :title="scopeLabel"
+        :disabled="chatStore.isInputLocked"
         @click="toggleDocumentPanel"
       >
         <i class="fas fa-paperclip"></i>
@@ -67,13 +90,14 @@
         @compositionstart="handleCompositionStart"
         @compositionend="handleCompositionEnd"
         @input="autoResize"
-        placeholder="和喵喵说点什么吧... (Shift+Enter 换行)"
+        :placeholder="chatStore.inputPlaceholder"
         rows="1"
         ref="textareaRef"
+        :disabled="chatStore.isInputLocked"
       ></textarea>
 
       <button
-        v-if="chatStore.isLoading"
+        v-if="chatStore.isViewingStreamingSession"
         @click="chatStore.handleStop"
         class="send-btn stop-btn"
         title="终止回答"
@@ -85,7 +109,8 @@
         v-else
         @click="onSend"
         class="send-btn"
-        title="发送"
+        :disabled="chatStore.isLoading"
+        :title="chatStore.isLoading ? '当前已有回答正在生成' : '发送'"
       >
         <i class="fas fa-paper-plane"></i>
       </button>
@@ -126,6 +151,7 @@ const loadDocumentsSilently = async () => {
 };
 
 const toggleDocumentPanel = async () => {
+  if (chatStore.isInputLocked) return;
   documentPanelOpen.value = !documentPanelOpen.value;
   if (documentPanelOpen.value && !documentStore.documents.length) {
     await loadDocumentsSilently();
@@ -173,6 +199,17 @@ const resetTextareaHeight = () => {
   if (textareaRef.value) {
     textareaRef.value.style.height = 'auto';
   }
+};
+
+const focusTextarea = async () => {
+  await nextTick();
+  textareaRef.value?.focus();
+  autoResize();
+};
+
+const selectHitlOption = async (option: string) => {
+  chatStore.selectHitlOption(option);
+  await focusTextarea();
 };
 
 const onSend = async () => {
