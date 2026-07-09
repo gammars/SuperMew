@@ -46,6 +46,8 @@ export interface RagTrace {
   sub_agent_count?: number;
   synthesis_merged_count?: number;
   sub_traces?: any[];
+  document_filter_enabled?: boolean;
+  selected_documents?: string[];
   initial_retrieved_chunks?: RetrievedChunk[];
   expanded_retrieved_chunks?: RetrievedChunk[];
 }

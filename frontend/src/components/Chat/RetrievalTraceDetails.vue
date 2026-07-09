@@ -9,6 +9,9 @@
         <div v-if="msg.ragTrace.retrieval_stage" class="trace-line">
           检索阶段：{{ msg.ragTrace.retrieval_stage }}
         </div>
+        <div v-if="msg.ragTrace.document_filter_enabled" class="trace-line">
+          文档范围：{{ (msg.ragTrace.selected_documents || []).join('；') }}
+        </div>
         <div v-if="msg.ragTrace.grade_score" class="trace-line">
           相关性评分：{{ msg.ragTrace.grade_score }}
         </div>

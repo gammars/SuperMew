@@ -255,6 +255,7 @@ class RAGState(TypedDict):
     complexity: Optional[str]
     complexity_reason: Optional[str]
     sub_questions: Optional[List[str]]
+    selected_documents: Optional[List[str]]
     is_sub_agent: bool
     sub_results: Annotated[List[dict], operator.add]
 
@@ -274,7 +275,10 @@ def _format_docs(docs: List[dict]) -> str:
 def retrieve_initial(state: RAGState) -> RAGState:
     query = state["question"]
     emit_rag_step("🔍", "正在检索知识库...", f"查询: {query[:50]}")
-    retrieved = retrieve_documents(query, top_k=5)
+    selected_documents = state.get("selected_documents")
+    if selected_documents:
+        emit_rag_step("📎", "限定文档检索", "；".join(selected_documents[:3]))
+    retrieved = retrieve_documents(query, top_k=5, selected_documents=selected_documents)
     results = retrieved.get("docs", [])
     retrieve_meta = retrieved.get("meta", {})
     context = _format_docs(results)
@@ -426,10 +430,15 @@ def retrieve_expanded(state: RAGState) -> RAGState:
     results: List[dict] = []
     rerank_errors = []
     retrieval_trace: dict = {}
+    selected_documents = state.get("selected_documents")
 
     if strategy in ("hyde", "complex"):
         hypothetical_doc = state.get("hypothetical_doc") or generate_hypothetical_document(state["question"])
-        retrieved_hyde = retrieve_documents(hypothetical_doc, top_k=5)
+        retrieved_hyde = retrieve_documents(
+            hypothetical_doc,
+            top_k=5,
+            selected_documents=selected_documents,
+        )
         results.extend(retrieved_hyde.get("docs", []))
         hyde_meta = retrieved_hyde.get("meta", {})
         emit_rag_step(
@@ -447,7 +456,11 @@ def retrieve_expanded(state: RAGState) -> RAGState:
 
     if strategy in ("step_back", "complex"):
         expanded_query = state.get("expanded_query") or state["question"]
-        retrieved_stepback = retrieve_documents(expanded_query, top_k=5)
+        retrieved_stepback = retrieve_documents(
+            expanded_query,
+            top_k=5,
+            selected_documents=selected_documents,
+        )
         results.extend(retrieved_stepback.get("docs", []))
         step_meta = retrieved_stepback.get("meta", {})
         emit_rag_step(
@@ -597,6 +610,7 @@ def _fanout_sub_questions(state: RAGState):
             "complexity": None,
             "complexity_reason": None,
             "sub_questions": None,
+            "selected_documents": state.get("selected_documents"),
             "is_sub_agent": False,
             "sub_results": [],
         })]
@@ -616,6 +630,7 @@ def _fanout_sub_questions(state: RAGState):
             "complexity": None,
             "complexity_reason": None,
             "sub_questions": None,
+            "selected_documents": state.get("selected_documents"),
             "is_sub_agent": True,
             "sub_results": [],
         })
@@ -662,6 +677,8 @@ def synthesis(state: RAGState) -> RAGState:
         "sub_agent_count": len(sub_results),
         "synthesis_merged_count": len(all_docs),
         "sub_traces": sub_traces,
+        "document_filter_enabled": bool(state.get("selected_documents")),
+        "selected_documents": state.get("selected_documents") or [],
     }
 
     return {"docs": deduped, "context": context, "rag_trace": rag_trace}
@@ -786,7 +803,7 @@ def build_rag_graph():
 rag_graph = build_rag_graph()
 
 
-def run_rag_graph(question: str) -> dict:
+def run_rag_graph(question: str, selected_documents: Optional[List[str]] = None) -> dict:
     return rag_graph.invoke({
         "question": question,
         "query": question,
@@ -803,6 +820,7 @@ def run_rag_graph(question: str) -> dict:
         "complexity": None,
         "complexity_reason": None,
         "sub_questions": None,
+        "selected_documents": selected_documents or None,
         "is_sub_agent": False,
         "sub_results": [],
     })

@@ -1,6 +1,7 @@
 from langchain_core.tools import tool
 
 from backend.chat.rag_context import record_rag_context
+from backend.chat.rag_scope import get_selected_documents
 from backend.rag.pipeline import run_rag_graph
 
 _KNOWLEDGE_TOOL_CALLS_THIS_TURN = 0
@@ -29,7 +30,8 @@ def search_knowledge_base(query: str) -> str:
             "Use the existing retrieval result and provide the final answer directly."
         )
 
-    rag_result = run_rag_graph(query)
+    selected_documents = get_selected_documents()
+    rag_result = run_rag_graph(query, selected_documents=selected_documents)
 
     docs = rag_result.get("docs", []) if isinstance(rag_result, dict) else []
     rag_trace = rag_result.get("rag_trace", {}) if isinstance(rag_result, dict) else {}

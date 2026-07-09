@@ -6,6 +6,7 @@ from pydantic import BaseModel
 class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = "default_session"
+    selected_documents: Optional[List[str]] = None
 
 
 class RetrievedChunk(BaseModel):
@@ -63,6 +64,8 @@ class RagTrace(BaseModel):
     sub_agent_count: Optional[int] = None
     synthesis_merged_count: Optional[int] = None
     sub_traces: Optional[List[dict]] = None
+    document_filter_enabled: Optional[bool] = None
+    selected_documents: Optional[List[str]] = None
 
 
 class ChatResponse(BaseModel):

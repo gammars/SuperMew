@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { useAuthStore } from './auth';
+import { useDocumentStore } from './documents';
 import { useSessionStore } from './sessions';
 import api from '@/utils/api';
 import type { Message, RagStep, GroupedRagStep } from '@/types/chat';
@@ -12,6 +13,7 @@ export const useChatStore = defineStore('chat', {
     activeNav: 'newChat' as 'newChat' | 'history' | 'settings',
     sessionId: 'session_' + Date.now(),
     abortController: null as AbortController | null,
+    selectedDocuments: [] as string[],
   }),
 
   actions: {
@@ -96,9 +98,22 @@ export const useChatStore = defineStore('chat', {
       }
     },
 
+    toggleSelectedDocument(filename: string) {
+      if (this.selectedDocuments.includes(filename)) {
+        this.selectedDocuments = this.selectedDocuments.filter((item) => item !== filename);
+      } else {
+        this.selectedDocuments = [...this.selectedDocuments, filename];
+      }
+    },
+
+    clearSelectedDocuments() {
+      this.selectedDocuments = [];
+    },
+
     async handleSend() {
       const authStore = useAuthStore();
       const sessionStore = useSessionStore();
+      const documentStore = useDocumentStore();
 
       if (!authStore.isAuthenticated) {
         alert('请先登录');
@@ -142,6 +157,11 @@ export const useChatStore = defineStore('chat', {
       this.abortController = new AbortController();
 
       try {
+        const availableFilenames = new Set(documentStore.documents.map((doc) => doc.filename));
+        const selectedDocuments = this.selectedDocuments.filter((filename) =>
+          availableFilenames.size ? availableFilenames.has(filename) : true
+        );
+
         const response = await fetch('/chat/stream', {
           method: 'POST',
           headers: {
@@ -151,6 +171,7 @@ export const useChatStore = defineStore('chat', {
           body: JSON.stringify({
             message: text,
             session_id: this.sessionId,
+            selected_documents: selectedDocuments,
           }),
           signal: this.abortController.signal,
         });

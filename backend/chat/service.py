@@ -6,6 +6,7 @@ from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, Sys
 from backend.chat.runtime import agent, fast_model
 from backend.chat.storage import ConversationStorage
 from backend.chat.rag_context import get_last_rag_context
+from backend.chat.rag_scope import set_selected_documents, reset_selected_documents
 from backend.chat.streaming import set_rag_step_queue
 from backend.tools import reset_knowledge_tool_calls
 
@@ -91,6 +92,7 @@ def chat_with_agent(
     user_text: str,
     user_id: str = "default_user",
     session_id: str = "default_session",
+    selected_documents: list[str] | None = None,
 ):
     messages, metadata = storage.load_with_meta(user_id, session_id)
     persistent_note = metadata.get("persistent_note", "")
@@ -98,15 +100,19 @@ def chat_with_agent(
 
     get_last_rag_context(clear=True)
     reset_knowledge_tool_calls()
+    scope_token = set_selected_documents(selected_documents)
 
     context_messages = _build_context_messages(messages, persistent_note, user_text)
     messages.append(HumanMessage(content=user_text))
     storage.save(user_id, session_id, messages)
 
-    result = agent.invoke(
-        {"messages": context_messages},
-        config={"recursion_limit": 8},
-    )
+    try:
+        result = agent.invoke(
+            {"messages": context_messages},
+            config={"recursion_limit": 8},
+        )
+    finally:
+        reset_selected_documents(scope_token)
 
     response_content = ""
     if isinstance(result, dict):
@@ -153,6 +159,7 @@ async def chat_with_agent_stream(
     user_text: str,
     user_id: str = "default_user",
     session_id: str = "default_session",
+    selected_documents: list[str] | None = None,
 ):
     messages, metadata = storage.load_with_meta(user_id, session_id)
     persistent_note = metadata.get("persistent_note", "")
@@ -160,6 +167,7 @@ async def chat_with_agent_stream(
 
     get_last_rag_context(clear=True)
     reset_knowledge_tool_calls()
+    scope_token = set_selected_documents(selected_documents)
 
     output_queue = asyncio.Queue()
 
@@ -237,6 +245,7 @@ async def chat_with_agent_stream(
             pass
         raise
     finally:
+        reset_selected_documents(scope_token)
         set_rag_step_queue(None)
         if not agent_task.done():
             agent_task.cancel()

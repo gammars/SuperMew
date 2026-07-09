@@ -64,6 +64,8 @@ RETRIEVAL_TRACE_FIELDS = (
     "post_rerank_count",
     "post_threshold_count",
     "retrieval_empty",
+    "document_filter_enabled",
+    "selected_documents",
 )
 
 # 全局初始化检索依赖（与 api 共用 embedding_service，保证 BM25 状态一致）
@@ -118,9 +120,33 @@ def merge_retrieval_trace(accumulated: Dict[str, Any], meta: Dict[str, Any]) -> 
             merged[key] = int(merged.get(key) or 0) + int(value or 0)
         elif key == "auto_merge_applied":
             merged[key] = bool(merged.get(key)) or bool(value)
+        elif key == "selected_documents":
+            current = merged.get(key) or []
+            combined = list(dict.fromkeys([*current, *(value or [])]))
+            merged[key] = combined
         else:
             merged.setdefault(key, value)
     return merged
+
+
+def _escape_milvus_string(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _build_document_filter(selected_documents: Optional[List[str]]) -> tuple[str, Dict[str, Any]]:
+    docs = [str(item).strip() for item in (selected_documents or []) if str(item).strip()]
+    docs = list(dict.fromkeys(docs))
+    base_filter = f"chunk_level == {LEAF_RETRIEVE_LEVEL}"
+    if not docs:
+        return base_filter, {
+            "document_filter_enabled": False,
+            "selected_documents": [],
+        }
+    quoted = ", ".join(f'"{_escape_milvus_string(item)}"' for item in docs)
+    return f"{base_filter} and filename in [{quoted}]", {
+        "document_filter_enabled": True,
+        "selected_documents": docs,
+    }
 
 
 def _get_rerank_endpoint() -> str:
@@ -401,6 +427,7 @@ def _finalize_retrieval(
     retrieval_mode: str,
     candidate_k: int,
     candidate_config: Dict[str, Any],
+    filter_meta: Dict[str, Any],
 ) -> Dict[str, Any]:
     """生产流水线：召回候选 → Auto-merge → Rerank（top_k）→ 阈值过滤。"""
     candidates, merge_meta = _auto_merge_candidates(retrieved)
@@ -411,6 +438,7 @@ def _finalize_retrieval(
         **rerank_meta,
         **merge_meta,
         **candidate_config,
+        **filter_meta,
         "retrieval_mode": retrieval_mode,
         "retrieval_pipeline": "recall_merge_rerank",
         "candidate_k": candidate_k,
@@ -425,9 +453,13 @@ def _finalize_retrieval(
     return {"docs": final_docs, "meta": meta}
 
 
-def retrieve_documents(query: str, top_k: int = 5) -> Dict[str, Any]:
+def retrieve_documents(
+    query: str,
+    top_k: int = 5,
+    selected_documents: Optional[List[str]] = None,
+) -> Dict[str, Any]:
     candidate_k, candidate_config = resolve_candidate_k(top_k)
-    filter_expr = f"chunk_level == {LEAF_RETRIEVE_LEVEL}"
+    filter_expr, filter_meta = _build_document_filter(selected_documents)
     try:
         dense_embeddings = _embedding_service.get_embeddings([query])
         dense_embedding = dense_embeddings[0]
@@ -445,6 +477,7 @@ def retrieve_documents(query: str, top_k: int = 5) -> Dict[str, Any]:
             retrieval_mode="hybrid",
             candidate_k=candidate_k,
             candidate_config=candidate_config,
+            filter_meta=filter_meta,
         )
     except Exception:
         try:
@@ -462,6 +495,7 @@ def retrieve_documents(query: str, top_k: int = 5) -> Dict[str, Any]:
                 retrieval_mode="dense_fallback",
                 candidate_k=candidate_k,
                 candidate_config=candidate_config,
+                filter_meta=filter_meta,
             )
         except Exception:
             return {
@@ -476,6 +510,7 @@ def retrieve_documents(query: str, top_k: int = 5) -> Dict[str, Any]:
                     "retrieval_pipeline": "recall_merge_rerank",
                     "candidate_k": candidate_k,
                     **candidate_config,
+                    **filter_meta,
                     "retrieval_top_k": top_k,
                     "leaf_retrieve_level": LEAF_RETRIEVE_LEVEL,
                     "recall_count": 0,
